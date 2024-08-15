@@ -1,0 +1,37 @@
+// Đây là file schema Prisma của bạn,
+// tìm hiểu thêm về nó trong tài liệu: https://pris.ly/d/prisma-schema
+
+// Tìm cách để tăng tốc truy vấn của bạn, hoặc mở rộng dễ dàng với các chức năng serverless hoặc edge của bạn?
+// Thử Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Status {
+  WAITING
+  ACCEPTED
+  REJECTED
+  CANCELLED
+}
+
+model Contract {
+  contract_id               Int      @id @default(autoincrement())
+  owner_address             String
+  renter_address            String
+  property_id               String
+  start_date                DateTime
+  end_date                  DateTime
+  deleted                   Boolean  @default(false)
+  status                    Status   @default(WAITING)
+  created_at                DateTime @default(now())
+  updated_at                DateTime @updatedAt
+  monthly_rent              Float
+  deposit_amount            Float
+  contract_terms            String
+}
