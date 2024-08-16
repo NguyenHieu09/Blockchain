@@ -3,6 +3,7 @@ import { AuthenticatedRequest } from '../middlewares/auth.middleware';
 import { createContractReq } from '../schemas/contract.schema';
 import {
     createContractService,
+    depositAndCreateContractService ,
     // getAllContractsService,
     // getContractByIdService,
     // getContractsByOwnerIdService,
@@ -27,6 +28,26 @@ export const createContract = async (req: AuthenticatedRequest, res: Response, n
         // Phản hồi với dữ liệu hợp đồng đã tạo
         res.status(201).json(createdContract);
     } catch (error) {
+        next(error);
+    }
+};
+
+export const depositAndCreateContract = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+        const { contractId, renterAddress } = req.body;
+
+        // Kiểm tra dữ liệu đầu vào
+        if (typeof contractId !== 'number' || !renterAddress) {
+            throw new Error('Contract ID and renter address are required and must be valid.');
+        }
+
+        // Gọi hàm service để thực hiện đặt cọc và tạo hợp đồng
+        const result = await depositAndCreateContractService(contractId, renterAddress);
+
+        // Trả về kết quả thành công
+        res.status(200).json(result);
+    } catch (error) {
+        // Chuyển lỗi cho middleware xử lý lỗi
         next(error);
     }
 };

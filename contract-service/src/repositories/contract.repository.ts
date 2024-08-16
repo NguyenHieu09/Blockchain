@@ -223,106 +223,6 @@
 
 
 
-// import Web3 from 'web3';
-// import { Contract } from 'web3-eth-contract';
-// import RentalContractABI from '../../contractRental/build/contracts/RentalContract.json'; // ABI của hợp đồng
-// import { Contract as PrismaContract, Status } from '@prisma/client';
-// import prisma from '../prisma/prismaClient';
-// import { CreateContractReq } from '../schemas/contract.schema';
-
-// // Khởi tạo Web3 và hợp đồng từ biến môi trường
-// const web3 = new Web3(new Web3.providers.HttpProvider('http://127.0.0.1:8545'));
-
-// const contractAddress = process.env.RENTAL_CONTRACT_ADDRESS || '0x973d24c05a0100216e347011f837875e3a6e161b';
-
-// // Kiểm tra tính hợp lệ của địa chỉ hợp đồng
-// if (!web3.utils.isAddress(contractAddress)) {
-//     throw new Error('Invalid contract address.');
-// }
-
-// const rentalContract = new web3.eth.Contract(RentalContractABI.abi as any, contractAddress);
-
-// // Định nghĩa hàm tạo hợp đồng trên blockchain
-// const createBlockchainContract = async (
-//     rentalIndex: number, 
-//     startDate: number, 
-//     endDate: number, 
-//     details: string, 
-//     monthlyRent: number, 
-//     propertyId: string
-// ) => {
-//     const accounts = await web3.eth.getAccounts();
-//     const ownerAddress = accounts[0]; // Địa chỉ của chủ nhà
-
-//     try {
-//         const receipt = await rentalContract.methods.createContract(
-//             rentalIndex, 
-//             startDate, 
-//             endDate, 
-//             details, 
-//             monthlyRent, 
-//             propertyId
-//         ).send({ 
-//             from: ownerAddress, 
-//             gas: '3000000', 
-//             gasPrice: web3.utils.toWei('20', 'gwei').toString() // Chuyển đổi thành chuỗi
-//         });
-        
-//         console.log("Blockchain contract created successfully:");
-//         console.log(receipt);
-
-//         return receipt; 
-//     } catch (error: unknown) {
-//         if (error instanceof Error) {
-//             console.error("Error creating blockchain contract:", error.message);
-//         } else {
-//             console.error("Unknown error occurred while creating blockchain contract.");
-//         }
-//         throw error;
-//     }
-// };
-
-// // Hàm tạo hợp đồng và lưu trữ vào cơ sở dữ liệu
-// export const createContract = async (contract: CreateContractReq): Promise<PrismaContract> => {
-//     const startDateTimestamp = new Date(contract.start_date).getTime() / 1000;
-//     const endDateTimestamp = new Date(contract.end_date).getTime() / 1000;
-
-//     const blockchainReceipt = await createBlockchainContract(
-//         contract.rentalIndex,
-//         startDateTimestamp,
-//         endDateTimestamp,
-//         contract.contract_terms,
-//         contract.monthly_rent,
-//         contract.property_id
-//     );
-
-//     if (!blockchainReceipt.contractAddress) {
-//         throw new Error('Blockchain contract address is undefined');
-//     }
-
-//     const contractData = {
-//         rental_index: contract.rentalIndex,
-//         owner_id: contract.owner_id, // Đảm bảo đây là kiểu number
-//         renter_id: contract.renter_id, // Đảm bảo đây là kiểu number
-//         property_id: contract.property_id,
-//         contract_terms: contract.contract_terms,
-//         start_date: new Date(startDateTimestamp * 1000),
-//         end_date: new Date(endDateTimestamp * 1000),
-//         deleted: false,
-//         status: Status.WAITING, // Sử dụng giá trị enum thay vì chuỗi
-//         blockchain_contract_address: blockchainReceipt.contractAddress
-//     };
-
-//     const createdContract = await prisma.contract.create({
-//         data: contractData,
-//     });
-
-//     console.log("Contract created and saved to database successfully:");
-//     console.log(createdContract);
-
-//     return createdContract;
-// };
-
 import Web3 from 'web3';
 import { Contract as Web3Contract } from 'web3-eth-contract';
 import RentalContractABI from '../../contractRental/build/contracts/RentalContract.json'; // ABI của hợp đồng
@@ -331,9 +231,9 @@ import prisma from '../prisma/prismaClient';
 import { CreateContractReq } from '../schemas/contract.schema';
 
 // Khởi tạo Web3 và hợp đồng từ biến môi trường
-const web3 = new Web3(new Web3.providers.HttpProvider('http://127.0.0.1:8545'));
+const web3 = new Web3(new Web3.providers.HttpProvider('http://127.0.0.1:7545'));
 
-const contractAddress = process.env.RENTAL_CONTRACT_ADDRESS || '0x21078C49Ab8a50c5CBFFaE02C932BBa8b3a61Fd1';
+const contractAddress = process.env.RENTAL_CONTRACT_ADDRESS || '0xF7E67563B7235D124b53f7bAb8ABCbB53d8f0727';
 
 // Kiểm tra tính hợp lệ của địa chỉ hợp đồng
 if (!web3.utils.isAddress(contractAddress)) {
@@ -426,3 +326,103 @@ export const createContract = async (contract: CreateContractReq): Promise<Prism
     return createdContract;
 };
 
+
+
+export const depositAndCreateContract = async (contractId: number, renterAddress: string): Promise<PrismaContract> => {
+    // Lấy thông tin hợp đồng từ cơ sở dữ liệu
+    const contract = await prisma.contract.findUnique({
+        where: { contract_id: contractId },
+    });
+
+    if (!contract) {
+        throw new Error('Contract not found.');
+    }
+
+    // rentalIndex bắt đầu từ 0, trong khi contractId bắt đầu từ 1
+    const rentalIndex = contractId ; // Chuyển contractId thành rentalIndex
+
+    // Lấy thông tin hợp đồng từ hợp đồng thông minh
+    const rental: any = await rentalContract.methods.getRentalDetails(rentalIndex).call();
+    console.log('Rental Details:', rental);
+    const depositAmount = rental.depositAmount;
+
+    // Kiểm tra xem renterAddress có trùng với renter trên hợp đồng hay không
+    if (renterAddress !== rental.renter) {
+        throw new Error('Renter address mismatch.');
+    }
+    // Ước lượng lượng gas cần thiết
+    const gasEstimate = await rentalContract.methods.depositAndCreateContract(rentalIndex).estimateGas({
+        from: renterAddress,
+        value: depositAmount,
+    });
+
+    // Gọi hàm depositAndCreateContract trên smart contract
+    await rentalContract.methods.depositAndCreateContract(rentalIndex).send({
+        from: renterAddress,
+        value: depositAmount, // Số tiền cần gửi để đặt cọc
+        gas: gasEstimate.toString(), // Convert gasEstimate to string
+        gasPrice: web3.utils.toWei('30', 'gwei').toString()
+    });
+
+    // Cập nhật trạng thái hợp đồng trong cơ sở dữ liệu
+    const updatedContract = await prisma.contract.update({
+        where: { contract_id: contractId },
+        data: { status: 'ACCEPTED' } // Hoặc giá trị phù hợp với enum Status của bạn
+    });
+
+    return updatedContract;
+};
+
+// export const depositAndCreateContract = async (contractId: number, renterAddress: string) => {
+//     const accounts = await web3.eth.getAccounts();
+//     const ownerAddress = accounts[0]; // Địa chỉ của chủ nhà
+
+//     try {
+//         // Lấy rentalIndex từ cơ sở dữ liệu
+//         const contract = await prisma.contract.findUnique({
+//             where: { contract_id: contractId }, // Giả sử contract_id là primary key
+//         });
+
+//         if (!contract) {
+//             throw new Error('Contract not found.');
+//         }
+
+//         // rentalIndex bắt đầu từ 0, trong khi contractId bắt đầu từ 1
+//         const rentalIndex = contractId - 1; // Chuyển contractId thành rentalIndex
+
+//         // Lấy thông tin hợp đồng từ hợp đồng thông minh
+//         const rental: any = await rentalContract.methods.getRentalDetails(rentalIndex).call();
+//         const depositAmount = rental.depositAmount;
+
+//         // Kiểm tra xem renterAddress có trùng với renter trên hợp đồng hay không
+//         if (renterAddress !== rental.renter) {
+//             throw new Error('Renter address mismatch.');
+//         }
+
+//         // Gọi hàm depositAndCreateContract trên smart contract
+//         const receipt = await rentalContract.methods.depositAndCreateContract(rentalIndex).send({
+//             from: renterAddress,
+//             value: depositAmount, // Số tiền cần gửi để đặt cọc
+//             gas: '3000000', 
+//             gasPrice: web3.utils.toWei('20', 'gwei').toString() // Chuyển đổi thành chuỗi
+//         });
+
+//         console.log("Deposit and contract creation successful:");
+//         console.log(receipt);
+
+//         // Cập nhật trạng thái hợp đồng trong cơ sở dữ liệu
+//         await prisma.contract.update({
+//             where: { contract_id: contractId }, // Sử dụng contractId làm khóa chính
+//             data: { status: Status.ACCEPTED }, // Thay đổi trạng thái thành 'ACCEPTED'
+//         });
+
+//         return receipt;
+//     } catch (error: unknown) {
+//         if (error instanceof Error) {
+//             console.error("Error depositing and creating blockchain contract:", error.message);
+//         } else {
+//             console.error("Unknown error occurred while depositing and creating blockchain contract.");
+//         }
+//         throw error;
+//     }
+// };

@@ -52,6 +52,7 @@ import { CreateContractReq } from '../schemas/contract.schema';
 import { Contract as PrismaContract } from '@prisma/client';
 import {
     createContract as createContractInRepo,
+    depositAndCreateContract as depositAndCreateContractInRepo
     // getContractById as getContractByIdInRepo,
     // updateContractStatus as updateContractStatusInRepo,
     // deleteContract as deleteContractInRepo
@@ -65,6 +66,17 @@ export const createContractService = async (contract: CreateContractReq): Promis
     } catch (error) {
         console.error("Error creating contract:", error);
         throw new Error("Could not create contract");
+    }
+};
+
+
+export const depositAndCreateContractService = async (contractId: number, renterAddress: string): Promise<PrismaContract> => {
+    try {
+        // Gọi phương thức repository để thực hiện đặt cọc và tạo hợp đồng
+        return await depositAndCreateContractInRepo(contractId, renterAddress);
+    } catch (error) {
+        console.error("Error processing deposit and creating contract:", error);
+        throw new Error("Could not process deposit and create contract");
     }
 };
 

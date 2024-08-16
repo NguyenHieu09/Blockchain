@@ -11,8 +11,10 @@ export interface CreateContractReq {
     start_date: Date;
     end_date: Date;
     rentalIndex: number;
-    monthly_rent: number;
-    deposit_amount: number;
+    depositAmount: string; // Giữ dạng chuỗi để tránh mất mát dữ liệu
+    monthlyRent: string; // Giữ dạng chuỗi để tránh mất mát dữ liệu
     
 }
+
+
 
