@@ -222,7 +222,6 @@
 // };
 
 
-
 import Web3 from 'web3';
 import { Contract as Web3Contract } from 'web3-eth-contract';
 import RentalContractABI from '../../contractRental/build/contracts/RentalContract.json'; // ABI của hợp đồng
@@ -233,7 +232,7 @@ import { CreateContractReq } from '../schemas/contract.schema';
 // Khởi tạo Web3 và hợp đồng từ biến môi trường
 const web3 = new Web3(new Web3.providers.HttpProvider('http://127.0.0.1:7545'));
 
-const contractAddress = process.env.RENTAL_CONTRACT_ADDRESS || '0xF7E67563B7235D124b53f7bAb8ABCbB53d8f0727';
+const contractAddress = process.env.RENTAL_CONTRACT_ADDRESS || '0x0e9dFa000DEf9C75d37759555395810E3582616C';
 
 // Kiểm tra tính hợp lệ của địa chỉ hợp đồng
 if (!web3.utils.isAddress(contractAddress)) {
@@ -244,6 +243,7 @@ const rentalContract = new web3.eth.Contract(RentalContractABI.abi as any, contr
 
 // Định nghĩa hàm tạo hợp đồng trên blockchain
 const createBlockchainContract = async (
+    ownerAddress: string,
     renterAddress: string, 
     startDate: number, 
     endDate: number, 
@@ -252,22 +252,20 @@ const createBlockchainContract = async (
     propertyId: string, 
     depositAmount: number
 ) => {
-    const accounts = await web3.eth.getAccounts();
-    const ownerAddress = accounts[0]; // Địa chỉ của chủ nhà
-
     try {
         const receipt = await rentalContract.methods.createContract(
-            renterAddress, 
-            startDate, 
-            endDate, 
-            details, 
-            monthlyRent, 
-            propertyId,
-            depositAmount
+            ownerAddress, // Địa chỉ chủ nhà
+            renterAddress, // Địa chỉ người thuê
+            startDate, // Ngày bắt đầu
+            endDate, // Ngày kết thúc
+            details, // Thông tin hợp đồng
+            monthlyRent, // Giá thuê hàng tháng
+            propertyId, // ID tài sản
+            depositAmount // Số tiền đặt cọc
         ).send({ 
             from: ownerAddress, 
             gas: '3000000', 
-            gasPrice: web3.utils.toWei('20', 'gwei').toString() // Chuyển đổi thành chuỗi
+            gasPrice: web3.utils.toWei('20', 'gwei').toString()
         });
         
         console.log("Blockchain contract created successfully:");
@@ -284,6 +282,7 @@ const createBlockchainContract = async (
     }
 };
 
+
 // Hàm tạo hợp đồng và lưu trữ vào cơ sở dữ liệu
 export const createContract = async (contract: CreateContractReq): Promise<PrismaContract> => {
     const startDateTimestamp = Math.floor(contract.start_date.getTime() / 1000);
@@ -291,6 +290,7 @@ export const createContract = async (contract: CreateContractReq): Promise<Prism
 
     // Tạo hợp đồng trên blockchain
     await createBlockchainContract(
+        contract.owner_address, // Đảm bảo đây là địa chỉ của chủ nhà
         contract.renter_address, // Đảm bảo đây là địa chỉ của người thuê
         startDateTimestamp,
         endDateTimestamp,
@@ -326,52 +326,142 @@ export const createContract = async (contract: CreateContractReq): Promise<Prism
     return createdContract;
 };
 
+// export const depositAndCreateContract = async (contractId: number, renterAddress: string): Promise<PrismaContract> => {
+//     try {
+//         // Lấy thông tin hợp đồng từ cơ sở dữ liệu
+//         const contract = await prisma.contract.findUnique({
+//             where: { contract_id: contractId },
+//         });
 
+//         if (!contract) {
+//             throw new Error('Contract not found.');
+//         }
 
+//         const rentalIndex = contractId - 1; // Chuyển contractId thành rentalIndex
+
+//         // Lấy thông tin hợp đồng từ hợp đồng thông minh
+//         const rental: any = await rentalContract.methods.getRentalDetails(rentalIndex).call();
+//         console.log('Rental Details:', rental);
+
+//         const depositAmount = rental.depositAmount;
+
+//         // Kiểm tra xem renterAddress có trùng với renter trên hợp đồng không
+//         if (renterAddress !== rental.renter) {
+//             throw new Error('Renter address mismatch.');
+//         }
+
+//         // Ước lượng lượng gas cần thiết
+//         const gasEstimate = await rentalContract.methods.depositAndCreateContract(rentalIndex).estimateGas({
+//             from: renterAddress,
+//             value: depositAmount,
+//         });
+//         console.log('Estimated Gas:', gasEstimate);
+
+//         // Gọi hàm depositAndCreateContract trên smart contract
+//         const receipt = await rentalContract.methods.depositAndCreateContract(rentalIndex).send({
+//             from: renterAddress,
+//             value: depositAmount,
+//             gas: gasEstimate.toString(),
+//             gasPrice: web3.utils.toWei('30', 'gwei').toString()
+//         });
+//         console.log('Transaction receipt:', receipt);
+
+//         // Cập nhật trạng thái hợp đồng trong cơ sở dữ liệu
+//         const updatedContract = await prisma.contract.update({
+//             where: { contract_id: contractId },
+//             data: { status: Status.ACCEPTED }
+//         });
+//         console.log('Updated Contract:', updatedContract);
+
+//         return updatedContract;
+//     } catch (error) {
+//         console.error('Error in depositAndCreateContract:', error);
+//         throw error;
+//     }
+// };
+
+// Hàm thực hiện đặt cọc và cập nhật hợp đồng
 export const depositAndCreateContract = async (contractId: number, renterAddress: string): Promise<PrismaContract> => {
-    // Lấy thông tin hợp đồng từ cơ sở dữ liệu
-    const contract = await prisma.contract.findUnique({
-        where: { contract_id: contractId },
-    });
+    try {
+        // Lấy thông tin hợp đồng từ cơ sở dữ liệu
+        const contract = await prisma.contract.findUnique({
+            where: { contract_id: contractId },
+        });
 
-    if (!contract) {
-        throw new Error('Contract not found.');
+        if (!contract) {
+            throw new Error('Contract not found.');
+        }
+
+        const rentalIndex = contractId - 1; // Chuyển contractId thành rentalIndex
+
+        // Lấy thông tin hợp đồng từ hợp đồng thông minh
+        const rental: any = await rentalContract.methods.getRentalDetails(rentalIndex).call();
+        console.log('Rental Details:', rental);
+
+        const depositAmount = rental.depositAmount;
+
+        // Kiểm tra xem renterAddress có trùng với renter trên hợp đồng không
+        if (renterAddress !== rental.renter) {
+            throw new Error('Renter address mismatch.');
+        }
+
+        // Ước lượng lượng gas cần thiết
+        const gasEstimate = await rentalContract.methods.depositAndCreateContract(rentalIndex).estimateGas({
+            from: renterAddress,
+            value: depositAmount,
+        });
+        console.log('Estimated Gas:', gasEstimate);
+
+        // Gọi hàm depositAndCreateContract trên smart contract
+        const receipt = await rentalContract.methods.depositAndCreateContract(rentalIndex).send({
+            from: renterAddress,
+            value: depositAmount,
+            gas: gasEstimate.toString(),
+            gasPrice: web3.utils.toWei('30', 'gwei').toString()
+        });
+        console.log('Transaction receipt:', receipt);
+
+        // Lấy thông tin hợp đồng từ blockchain sau khi giao dịch đặt cọc
+        const rentalDetails: any = await rentalContract.methods.getRentalDetails(rentalIndex).call();
+        console.log('Updated Rental Details:', rentalDetails);
+
+        // Cập nhật trạng thái hợp đồng trong cơ sở dữ liệu
+        const updatedContract = await prisma.contract.update({
+            where: { contract_id: contractId },
+            data: { 
+                status: Status.ACCEPTED,
+                updated_at: new Date() // Cập nhật thời gian
+            }
+        });
+        console.log('Updated Contract:', updatedContract);
+
+        return updatedContract;
+    } catch (error) {
+        console.error('Error in depositAndCreateContract:', error);
+        throw error;
     }
-
-    // rentalIndex bắt đầu từ 0, trong khi contractId bắt đầu từ 1
-    const rentalIndex = contractId ; // Chuyển contractId thành rentalIndex
-
-    // Lấy thông tin hợp đồng từ hợp đồng thông minh
-    const rental: any = await rentalContract.methods.getRentalDetails(rentalIndex).call();
-    console.log('Rental Details:', rental);
-    const depositAmount = rental.depositAmount;
-
-    // Kiểm tra xem renterAddress có trùng với renter trên hợp đồng hay không
-    if (renterAddress !== rental.renter) {
-        throw new Error('Renter address mismatch.');
-    }
-    // Ước lượng lượng gas cần thiết
-    const gasEstimate = await rentalContract.methods.depositAndCreateContract(rentalIndex).estimateGas({
-        from: renterAddress,
-        value: depositAmount,
-    });
-
-    // Gọi hàm depositAndCreateContract trên smart contract
-    await rentalContract.methods.depositAndCreateContract(rentalIndex).send({
-        from: renterAddress,
-        value: depositAmount, // Số tiền cần gửi để đặt cọc
-        gas: gasEstimate.toString(), // Convert gasEstimate to string
-        gasPrice: web3.utils.toWei('30', 'gwei').toString()
-    });
-
-    // Cập nhật trạng thái hợp đồng trong cơ sở dữ liệu
-    const updatedContract = await prisma.contract.update({
-        where: { contract_id: contractId },
-        data: { status: 'ACCEPTED' } // Hoặc giá trị phù hợp với enum Status của bạn
-    });
-
-    return updatedContract;
 };
+
+// Hàm lấy thông tin chi tiết hợp đồng từ blockchain
+export const getRentalDetails = async (rentalIndex: number) => {
+    try {
+        // Gọi phương thức getRentalDetails trên hợp đồng thông minh
+        const rentalDetails: any = await rentalContract.methods.getRentalDetails(rentalIndex).call();
+        
+        // Log thông tin chi tiết hợp đồng
+        console.log('Rental Details:', rentalDetails);
+
+        return rentalDetails;
+    } catch (error: unknown) {
+        if (error instanceof Error) {
+            console.error('Error fetching rental details:', error.message);
+        } else {
+            console.error('Unknown error occurred while fetching rental details.');
+        }
+        throw error;
+    }
+};
+
 
 // export const depositAndCreateContract = async (contractId: number, renterAddress: string) => {
 //     const accounts = await web3.eth.getAccounts();

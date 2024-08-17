@@ -2,7 +2,7 @@
 pragma solidity ^0.8.0;
 
 contract RentalContract {
-    enum RentalStatus { NotCreated, Deposited, Paid, Ended }
+    enum RentalStatus { NotCreated, Deposited, Ongoing, Ended }
 
     struct Rental {
         address payable owner;
@@ -14,6 +14,7 @@ contract RentalContract {
         uint monthlyRent;
         string propertyId;
         RentalStatus status;
+        uint lastPaymentDate; // Ngày thanh toán cuối cùng
     }
 
     Rental[] public rentals;
@@ -49,6 +50,7 @@ contract RentalContract {
     }
 
     function createContract(
+        address payable _owner,
         address payable _renter,
         uint _startDate,
         uint _endDate,
@@ -58,9 +60,10 @@ contract RentalContract {
         uint _depositAmount
     ) public {
         require(_startDate < _endDate, "Invalid rental dates");
+        require(msg.sender == _owner, "Only the owner can create the contract");
 
         Rental memory newRental = Rental({
-            owner: payable(msg.sender),
+            owner: _owner,
             renter: _renter,
             startDate: _startDate,
             endDate: _endDate,
@@ -68,15 +71,14 @@ contract RentalContract {
             depositAmount: _depositAmount,
             monthlyRent: _monthlyRent,
             propertyId: _propertyId,
-            status: RentalStatus.NotCreated
+            status: RentalStatus.NotCreated,
+            lastPaymentDate: 0
         });
 
         rentals.push(newRental);
     }
 
-    function depositAndCreateContract(
-        uint _rentalIndex
-    ) public payable {
+    function depositAndCreateContract(uint _rentalIndex) public payable {
         require(_rentalIndex < rentals.length, "Invalid rental index");
         Rental storage rental = rentals[_rentalIndex];
 
@@ -84,22 +86,28 @@ contract RentalContract {
         require(rental.status == RentalStatus.NotCreated, "Contract already created");
         require(msg.value == rental.depositAmount, "Incorrect deposit amount");
 
-        // Update status to Deposited
         rental.status = RentalStatus.Deposited;
 
-        // Emit events
         emit DepositMade(msg.sender, msg.value, rental.propertyId, block.timestamp);
-        emit ContractCreated(rental.owner, rental.renter, rental.propertyId, rental.startDate, rental.endDate);
     }
 
-    function payRent(uint _rentalIndex) public payable onlyRenter(_rentalIndex) inRentalPeriod(_rentalIndex) {
+    function payRent(uint _rentalIndex) public payable onlyRenter(_rentalIndex) inRentalPeriod(_rentalIndex) rentalNotEnded(_rentalIndex) {
         require(_rentalIndex < rentals.length, "Invalid rental index");
         Rental storage rental = rentals[_rentalIndex];
 
+        require(rental.status == RentalStatus.Ongoing || rental.status == RentalStatus.Deposited, "Rental period not started or already ended");
         require(msg.value == rental.monthlyRent, "Incorrect rent amount");
-        require(rental.status == RentalStatus.Deposited, "Deposit not made");
 
-        rental.status = RentalStatus.Paid;
+        // Nếu là lần thanh toán đầu tiên, chuyển trạng thái thành Ongoing
+        if (rental.lastPaymentDate == 0) {
+            require(block.timestamp >= rental.startDate, "Not yet time for the first rent payment");
+            rental.status = RentalStatus.Ongoing; // Chuyển trạng thái hợp đồng thành Ongoing
+        } else {
+            uint nextPaymentDate = rental.lastPaymentDate + 30 days;
+            require(block.timestamp >= nextPaymentDate, "Not yet time for the next rent payment");
+        }
+
+        rental.lastPaymentDate = block.timestamp;
         rental.owner.transfer(msg.value);
 
         emit RentPaid(msg.sender, rental.owner, msg.value, rental.propertyId, block.timestamp);
@@ -109,12 +117,12 @@ contract RentalContract {
         Rental storage rental = rentals[_rentalIndex];
         require(block.timestamp > rental.endDate, "Cannot end contract before the end date");
 
-        rental.status = RentalStatus.Ended;
-
-        if (rental.status == RentalStatus.Paid) {
+        if (rental.status == RentalStatus.Ongoing) {
             rental.renter.transfer(rental.depositAmount);
             emit DepositReturned(rental.renter, rental.depositAmount, rental.propertyId, block.timestamp);
         }
+
+        rental.status = RentalStatus.Ended;
 
         emit ContractEnded(rental.owner, rental.renter, rental.propertyId, block.timestamp);
     }

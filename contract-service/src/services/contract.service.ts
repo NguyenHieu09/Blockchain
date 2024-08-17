@@ -52,7 +52,9 @@ import { CreateContractReq } from '../schemas/contract.schema';
 import { Contract as PrismaContract } from '@prisma/client';
 import {
     createContract as createContractInRepo,
-    depositAndCreateContract as depositAndCreateContractInRepo
+    depositAndCreateContract as depositAndCreateContractInRepo,
+    getRentalDetails as getRentalDetailsInRepo
+    
     // getContractById as getContractByIdInRepo,
     // updateContractStatus as updateContractStatusInRepo,
     // deleteContract as deleteContractInRepo
@@ -79,6 +81,7 @@ export const depositAndCreateContractService = async (contractId: number, renter
         throw new Error("Could not process deposit and create contract");
     }
 };
+
 
 // // Hàm để lấy hợp đồng theo ID
 // export const getContractById = async (contractId: number): Promise<PrismaContract | null> => {
