@@ -4,6 +4,7 @@ import { createContractReq } from '../schemas/contract.schema';
 import {
     createContractService,
     depositAndCreateContractService ,
+    payMonthlyRentService,
     // getAllContractsService,
     // getContractByIdService,
     // getContractsByOwnerIdService,
@@ -52,6 +53,25 @@ export const depositAndCreateContract = async (req: AuthenticatedRequest, res: R
     }
 };
 
+export const payMonthlyRent = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+        const { contractId, renterAddress } = req.body;
+
+        // Kiểm tra dữ liệu đầu vào
+        if (typeof contractId !== 'number' || !renterAddress) {
+            throw new Error('Contract ID and renter address are required and must be valid.');
+        }
+
+        // Gọi hàm service để thực hiện thanh toán tiền thuê
+        const updatedContract = await payMonthlyRentService(contractId, renterAddress);
+
+        // Phản hồi với dữ liệu hợp đồng đã cập nhật
+        res.status(200).json(updatedContract);
+    } catch (error) {
+        // Chuyển lỗi cho middleware xử lý lỗi
+        next(error);
+    }
+};
 // export const createContract = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
 //     try {
 //         const safeParse = createContractReq.safeParse(req.body);

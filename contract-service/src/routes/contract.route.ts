@@ -2,6 +2,7 @@ import express from 'express';
 import {
     createContract,
     depositAndCreateContract,
+    payMonthlyRent,
     // deleteContractById,
     // getAllContracts,
     // getContractById,
@@ -19,6 +20,9 @@ router.post('/', authMiddleware, roleMiddleware('owner'), createContract);
 
 // Route để thực hiện đặt cọc và tạo hợp đồng thành công
 router.post('/deposit', authMiddleware, roleMiddleware('renter'), depositAndCreateContract);
+
+// Route để thanh toán tiền thuê hàng tháng
+router.post('/pay', authMiddleware, roleMiddleware('renter'), payMonthlyRent);
 // router.get('/', authMiddleware, roleMiddleware('admin'), getAllContracts);
 // router.get('/owner', authMiddleware, roleMiddleware('owner'), getContractsByOwnerId);
 // router.get('/renter', authMiddleware, roleMiddleware('renter'), getContractsByRenterId);

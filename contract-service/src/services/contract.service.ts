@@ -53,8 +53,7 @@ import { Contract as PrismaContract } from '@prisma/client';
 import {
     createContract as createContractInRepo,
     depositAndCreateContract as depositAndCreateContractInRepo,
-    getRentalDetails as getRentalDetailsInRepo
-    
+    payMonthlyRent as payMonthlyRentInRepo,
     // getContractById as getContractByIdInRepo,
     // updateContractStatus as updateContractStatusInRepo,
     // deleteContract as deleteContractInRepo
@@ -79,6 +78,17 @@ export const depositAndCreateContractService = async (contractId: number, renter
     } catch (error) {
         console.error("Error processing deposit and creating contract:", error);
         throw new Error("Could not process deposit and create contract");
+    }
+};
+
+// Hàm để thanh toán tiền thuê hàng tháng
+export const payMonthlyRentService = async (contractId: number, renterAddress: string): Promise<PrismaContract> => {
+    try {
+        // Gọi phương thức repository để thực hiện thanh toán tiền thuê
+        return await payMonthlyRentInRepo(contractId, renterAddress);
+    } catch (error) {
+        console.error("Error processing monthly rent payment:", error);
+        throw new Error("Could not process monthly rent payment");
     }
 };
 
