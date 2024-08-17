@@ -21,17 +21,31 @@ enum Status {
 }
 
 model Contract {
-  contract_id               Int      @id @default(autoincrement())
+  contract_id               Int           @id @default(autoincrement())
   owner_address             String
   renter_address            String
   property_id               String
   start_date                DateTime
   end_date                  DateTime
-  deleted                   Boolean  @default(false)
-  status                    Status   @default(WAITING)
-  created_at                DateTime @default(now())
-  updated_at                DateTime @updatedAt
+  deleted                   Boolean       @default(false)
+  status                    Status        @default(WAITING)
+  created_at                DateTime      @default(now())
+  updated_at                DateTime      @updatedAt
   monthly_rent              Float
   deposit_amount            Float
   contract_terms            String
+  Transactions              Transaction[] @relation("ContractTransactions")
 }
+
+model Transaction {
+  id                      Int      @id @default(autoincrement())
+  contract_id             Int
+  amount                  Float
+  transaction_hash        String
+  status                  String
+  description             String?  // Trường mô tả nội dung giao dịch
+  created_at              DateTime @default(now())
+  updated_at              DateTime @updatedAt
+  Contract                Contract @relation("ContractTransactions", fields: [contract_id], references: [contract_id])
+}
+
