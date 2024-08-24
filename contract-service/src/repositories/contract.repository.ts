@@ -232,7 +232,7 @@ import { CreateContractReq } from '../schemas/contract.schema';
 // Khởi tạo Web3 và hợp đồng từ biến môi trường
 const web3 = new Web3(new Web3.providers.HttpProvider('http://127.0.0.1:7545'));
 
-const contractAddress = process.env.RENTAL_CONTRACT_ADDRESS || '0x0e9dFa000DEf9C75d37759555395810E3582616C';
+const contractAddress = process.env.RENTAL_CONTRACT_ADDRESS || '0xC18d458543c6B7616cE1AD7B1b523B51Ae7ad2e6';
 
 // Kiểm tra tính hợp lệ của địa chỉ hợp đồng
 if (!web3.utils.isAddress(contractAddress)) {
@@ -372,6 +372,20 @@ export const depositAndCreateContract = async (contractId: number, renterAddress
         const rentalDetails: any = await rentalContract.methods.getRentalDetails(rentalIndex).call();
         console.log('Updated Rental Details:', rentalDetails);
 
+         // Chuyển đổi BigInt thành kiểu number hoặc float
+        const amountAsFloat = Number(depositAmount);
+
+         // Lưu thông tin giao dịch vào cơ sở dữ liệu
+        await prisma.transaction.create({
+             data: {
+                 contract_id: contractId,
+                 amount: amountAsFloat,
+                 transaction_hash: receipt.transactionHash,
+                 status: 'COMPLETED',
+                 description: 'Deposit and contract creation',
+             },
+         });
+
         // Cập nhật trạng thái hợp đồng trong cơ sở dữ liệu
         const updatedContract = await prisma.contract.update({
             where: { contract_id: contractId },
@@ -388,6 +402,7 @@ export const depositAndCreateContract = async (contractId: number, renterAddress
         throw error;
     }
 };
+
 export const payMonthlyRent = async (contractId: number, renterAddress: string): Promise<PrismaContract> => {
     try {
         // Lấy thông tin hợp đồng từ cơ sở dữ liệu
@@ -418,15 +433,9 @@ export const payMonthlyRent = async (contractId: number, renterAddress: string):
         console.log('Start Date:', startDate);
         console.log('Last Payment Date:', lastPaymentDate);
 
-        // Kiểm tra trạng thái hợp đồng
-        const RENTAL_STATUS_NOT_CREATED = '0'; // Chuyển từ 0n thành chuỗi
-        const RENTAL_STATUS_DEPOSITED = '1'; // Chuyển từ 1n thành chuỗi
-        // const RENTAL_STATUS_ONGOING = '2'; // Chuyển từ 2n thành chuỗi
-        const RENTAL_STATUS_ENDED = '3'; // Chuyển từ 3n thành chuỗi
+        const RENTAL_STATUS_NOT_CREATED = 0;
+        const RENTAL_STATUS_ENDED = 3;
 
-        if (rental.status !== RENTAL_STATUS_DEPOSITED) {
-            throw new Error('Contract is not in the Deposited state.');
-        }
 
         if (rental.status === RENTAL_STATUS_NOT_CREATED || rental.status === RENTAL_STATUS_ENDED) {
             throw new Error('Rental period not started or already ended.');
@@ -465,12 +474,30 @@ export const payMonthlyRent = async (contractId: number, renterAddress: string):
         });
         console.log('Transaction receipt:', receipt);
 
+        // Log thông tin hợp đồng sau khi thanh toán thành công
+        const updatedRental: any = await rentalContract.methods.getRentalDetails(rentalIndex).call();
+        console.log('Updated Rental Details:', updatedRental);
+
+        // Chuyển đổi BigInt thành kiểu number hoặc float
+        const amountAsFloat = Number(rental.monthlyRent);
+
+        // Lưu thông tin giao dịch vào cơ sở dữ liệu
+        await prisma.transaction.create({
+            data: {
+                contract_id: contractId,
+                amount: amountAsFloat,
+                transaction_hash: receipt.transactionHash,
+                status: 'COMPLETED',
+                description: 'Monthly rent payment',
+            },
+        });
+
         // Cập nhật trạng thái hợp đồng trong cơ sở dữ liệu sau khi thanh toán thành công
         const updatedContract = await prisma.contract.update({
             where: { contract_id: contractId },
             data: {
                 updated_at: new Date(), // Cập nhật thời gian
-                status: 'REJECTED' // Cập nhật trạng thái thành REJECTED
+                status: 'REJECTED', // Cập nhật trạng thái thành ONGOING sau khi thanh toán thành công
             }
         });
         console.log('Updated Contract:', updatedContract);
@@ -481,6 +508,118 @@ export const payMonthlyRent = async (contractId: number, renterAddress: string):
         throw error;
     }
 };
+
+// export const payMonthlyRent = async (contractId: number, renterAddress: string): Promise<PrismaContract> => {
+//     try {
+//         // Lấy thông tin hợp đồng từ cơ sở dữ liệu
+//         const contract = await prisma.contract.findUnique({
+//             where: { contract_id: contractId },
+//         });
+
+//         if (!contract) {
+//             throw new Error('Contract not found.');
+//         }
+
+//         const rentalIndex = contractId - 1; // Chuyển contractId thành rentalIndex
+
+//         // Lấy thông tin hợp đồng từ hợp đồng thông minh
+//         const rental: any = await rentalContract.methods.getRentalDetails(rentalIndex).call();
+//         console.log('Rental Details:', rental);
+
+//         // Kiểm tra xem renterAddress có trùng với renter trên hợp đồng không
+//         if (renterAddress.toLowerCase() !== rental.renter.toLowerCase()) {
+//             throw new Error('Renter address mismatch.');
+//         }
+
+//         const currentTime = Math.floor(Date.now() / 1000); // Thời gian hiện tại tính bằng giây
+//         const startDate = Number(rental.startDate); // Chuyển đổi startDate từ hợp đồng thông minh
+//         const lastPaymentDate = Number(rental.lastPaymentDate); // Chuyển đổi lastPaymentDate từ hợp đồng thông minh
+
+//         console.log('Current Time:', currentTime);
+//         console.log('Start Date:', startDate);
+//         console.log('Last Payment Date:', lastPaymentDate);
+
+//         const RENTAL_STATUS_NOT_CREATED = 0;
+//         const RENTAL_STATUS_DEPOSITED = 1;
+        
+//         const RENTAL_STATUS_ENDED = 3;
+
+//         // if (rental.status !== RENTAL_STATUS_DEPOSITED) {
+//         //     throw new Error('Contract is not in a state that allows rent payments.');
+//         // }
+
+//         if (rental.status === RENTAL_STATUS_NOT_CREATED || rental.status === RENTAL_STATUS_ENDED) {
+//             throw new Error('Rental period not started or already ended.');
+//         }
+
+//         // Kiểm tra số tiền thuê hàng tháng có chính xác không
+//         if (web3.utils.toWei(contract.monthly_rent.toString(), 'wei') !== rental.monthlyRent.toString()) {
+//             throw new Error('Incorrect rent amount.');
+//         }
+
+//         // Nếu là lần thanh toán đầu tiên, đảm bảo thời gian thanh toán đúng
+//         if (lastPaymentDate === 0) {
+//             if (currentTime < startDate) {
+//                 throw new Error('Not yet time for the first rent payment.');
+//             }
+//         } else {
+//             const nextPaymentDate = lastPaymentDate + (30 * 24 * 60 * 60); // 30 ngày tính bằng giây
+//             if (currentTime < nextPaymentDate) {
+//                 throw new Error('Not yet time for the next rent payment.');
+//             }
+//         }
+
+//         // Ước lượng lượng gas cần thiết
+//         const gasEstimate = await rentalContract.methods.payRent(rentalIndex).estimateGas({
+//             from: renterAddress,
+//             value: rental.monthlyRent,
+//         });
+//         console.log('Estimated Gas:', gasEstimate);
+
+//         // Gọi hàm payRent trên smart contract
+//         const receipt = await rentalContract.methods.payRent(rentalIndex).send({
+//             from: renterAddress,
+//             value: rental.monthlyRent, // Giá trị tiền thuê hàng tháng
+//             gas: gasEstimate.toString(),
+//             gasPrice: web3.utils.toWei('30', 'gwei').toString(),
+//         });
+//         console.log('Transaction receipt:', receipt);
+
+//          // Log thông tin hợp đồng sau khi thanh toán thành công
+//          const updatedRental: any = await rentalContract.methods.getRentalDetails(rentalIndex).call();
+//          console.log('Updated Rental Details:', updatedRental);
+
+
+//          // Chuyển đổi BigInt thành kiểu number hoặc float
+//          const amountAsFloat = Number(rental.monthlyRent);
+
+//          // Lưu thông tin giao dịch vào cơ sở dữ liệu
+//         await prisma.transaction.create({
+//             data: {
+//                 contract_id: contractId,
+//                 amount: amountAsFloat,
+//                 transaction_hash: receipt.transactionHash,
+//                 status: 'COMPLETED',
+//                 description: 'Monthly rent payment',
+//             },
+//         });
+
+//         // Cập nhật trạng thái hợp đồng trong cơ sở dữ liệu sau khi thanh toán thành công
+//         const updatedContract = await prisma.contract.update({
+//             where: { contract_id: contractId },
+//             data: {
+//                 updated_at: new Date(), // Cập nhật thời gian
+//                 status: 'REJECTED' // Cập nhật trạng thái thành REJECTED
+//             }
+//         });
+//         console.log('Updated Contract:', updatedContract);
+
+//         return updatedContract;
+//     } catch (error) {
+//         console.error('Error in payMonthlyRent:', error);
+//         throw error;
+//     }
+// };
 
 
 // export const payMonthlyRent = async (contractId: number, renterAddress: string): Promise<PrismaContract> => {
