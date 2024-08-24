@@ -34,6 +34,7 @@ model Contract {
   monthly_rent              Float
   deposit_amount            Float
   contract_terms            String
+  transaction_hash_contract String?
   Transactions              Transaction[] @relation("ContractTransactions")
 }
 
